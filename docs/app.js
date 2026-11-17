@@ -5,6 +5,7 @@
 const FALLBACK_TABS = [
   { id: "chest", label: { tr: "Sandık", vi: "Rương", en: "Chest" }, filter: { kind: "chest" } },
   { id: "bag", label: { tr: "Çanta", vi: "Túi", en: "Bag" }, filter: { kind: "bag" } },
+  { id: "flow", label: { tr: "Jeton akışı", vi: "Dòng xu", en: "Coin flow" }, filter: { kind: "live" } },
   { id: "ratio2", label: { tr: "Oran ≥ 2", vi: "Ratio ≥ 2", en: "Ratio ≥ 2" }, filter: { min_ratio: 2 } },
   { id: "ratio4", label: { tr: "Oran ≥ 4", vi: "Ratio ≥ 4", en: "Ratio ≥ 4" }, filter: { min_ratio: 4 } },
   { id: "level01", label: { tr: "Çanta Lv 0–1", vi: "Túi level 0–1", en: "Bag Lv 0–1" }, filter: { kind: "bag", variants: ["l0", "l1"] } },
@@ -22,6 +23,8 @@ const I18N = {
     now: "şimdi", late: "geçti", inSec: "sn", inMin: "dk", soon: "açılıyor",
     newChest: "Yeni sandık!", newBag: "Yeni çanta!", stale: "veri eski",
     gold: "Altın", hanging: "Askıda", normal: "Sandık", bagLv: lv => `Çanta Lv ${lv}`,
+    flow: "Jeton akışı", perMin: "jeton/dk", coinsTotal: "toplam", senders: "gönderen",
+    liveNow: "canlı", hasChest: "sandık var",
     offline: "Bağlantı kesildi, yeniden deneniyor…", loading: "veri yükleniyor…",
     noData: "Veri dosyası bulunamadı — Actions işçisi henüz çalışmamış olabilir.",
   },
@@ -33,6 +36,8 @@ const I18N = {
     now: "now", late: "late", inSec: "s", inMin: "m", soon: "opening",
     newChest: "New chest!", newBag: "New bag!", stale: "stale data",
     gold: "Gold", hanging: "Hanging", normal: "Chest", bagLv: lv => `Bag Lv ${lv}`,
+    flow: "Coin flow", perMin: "coins/min", coinsTotal: "total", senders: "senders",
+    liveNow: "live", hasChest: "chest spotted",
     offline: "Disconnected, retrying…", loading: "loading data…",
     noData: "Data file not found — the Actions worker may not have run yet.",
   },
@@ -44,6 +49,8 @@ const I18N = {
     now: "bây giờ", late: "trễ", inSec: "giây", inMin: "phút", soon: "sắp mở",
     newChest: "Rương mới!", newBag: "Túi mới!", stale: "dữ liệu cũ",
     gold: "Vàng", hanging: "Treo", normal: "Rương", bagLv: lv => `Túi level ${lv}`,
+    flow: "Dòng xu", perMin: "xu/phút", coinsTotal: "tổng", senders: "người tặng",
+    liveNow: "trực tiếp", hasChest: "có rương",
     offline: "Mất kết nối, đang thử lại…", loading: "đang tải dữ liệu…",
     noData: "Không tìm thấy tệp dữ liệu — worker Actions chưa chạy.",
   },
@@ -109,6 +116,7 @@ function fmtClock(sec) {
 }
 
 function variantLabel(room) {
+  if (room.kind === "live") return t("flow");
   if (room.kind === "bag") {
     const lv = (room.variant || "l0").replace("l", "");
     return t("bagLv")(lv);
@@ -289,7 +297,7 @@ async function fetchData() {
     $("#offline").classList.add("hidden");
     setStatus("ok");
     render();
-    const fresh = state.rooms.filter(r => !state.seen.has(r.id));
+    const fresh = state.rooms.filter(r => !state.seen.has(r.id) && r.kind !== "live");
     for (const room of fresh) state.seen.add(room.id);
     if (!state.firstLoad && fresh.length) {
       const top = fresh.slice().sort((a, b) => (b.ratio || 0) - (a.ratio || 0))[0];
@@ -385,13 +393,36 @@ function render() {
     $(".nick", node).textContent = room.nickname || room.user || "—";
     $(".handle", node).textContent = "@" + (room.user || "—");
     const badge = $(".kind-badge", node);
-    badge.textContent = room.kind === "chest" ? t("chest") : t("bag");
+    const isLive = room.kind === "live";
+    badge.textContent = isLive ? t("flow") : room.kind === "chest" ? t("chest") : t("bag");
     badge.classList.toggle("bag", room.kind === "bag");
+    badge.classList.toggle("flow", isLive);
     $(".viewers", node).textContent = `${fmtNum(room.viewers)} ${t("viewers")}`;
-    $(".title", node).textContent = room.title || variantLabel(room);
-    $(".coins", node).textContent = fmtNum(room.coins);
-    $(".ratio", node).textContent = (room.ratio ?? 0).toFixed(1);
-    $(".slots", node).textContent = fmtNum(room.slots);
+    const title = room.title || variantLabel(room);
+    $(".title", node).textContent = isLive && room.envelope_id ? `🎁 ${title}` : title;
+
+    const labelOf = cls => {
+      const el = $(`.${cls}`, node);
+      return el ? el.parentElement.querySelector(".m-lbl") : null;
+    };
+    if (isLive) {
+      // Jeton akışı satırı: toplam akan jeton, dakikalık hız, hediye gönderen sayısı.
+      $(".coins", node).textContent = fmtNum(room.gift_coins ?? room.coins);
+      $(".ratio", node).textContent = fmtNum(Math.round(room.diamonds_per_min || 0));
+      $(".slots", node).textContent = fmtNum(room.gift_senders || room.slots);
+      const lc = labelOf("coins"), lr = labelOf("ratio"), ls = labelOf("slots");
+      if (lc) lc.textContent = t("coinsTotal");
+      if (lr) lr.textContent = t("perMin");
+      if (ls) ls.textContent = t("senders");
+    } else {
+      $(".coins", node).textContent = fmtNum(room.coins);
+      $(".ratio", node).textContent = (room.ratio ?? 0).toFixed(1);
+      $(".slots", node).textContent = fmtNum(room.slots);
+      const lc = labelOf("coins"), lr = labelOf("ratio"), ls = labelOf("slots");
+      if (lc) lc.textContent = t("coins");
+      if (lr) lr.textContent = t("ratio");
+      if (ls) ls.textContent = t("slots");
+    }
     const joinedM = $(".joined-metric", node);
     const metrics = $(".metrics", node);
     if (room.kind === "bag") {
@@ -417,9 +448,18 @@ function render() {
 }
 
 function updateTimer(node, room) {
-  const left = Math.round(((Number(room.opens_at) || 0) - Date.now()) / 1000);
   const val = $(".timer-val", node);
   const lbl = $(".timer-lbl", node);
+  if (room.kind === "live") {
+    // Akış satırının açılış saati yok: canlı olduğunu ve dakikalık hızı göster.
+    val.textContent = "●";
+    val.style.color = state.prefs.colors.green;
+    lbl.textContent = t("liveNow");
+    node.classList.remove("soon");
+    node.classList.add("open-now");
+    return;
+  }
+  const left = Math.round(((Number(room.opens_at) || 0) - Date.now()) / 1000);
   const color = timerColor(Math.max(0, left));
   if (left > 0) {
     val.textContent = fmtClock(left);
@@ -488,13 +528,15 @@ function renderMini() {
     row.className = "mini-row";
     row._room = room;
     const left = Math.round(((Number(room.opens_at) || 0) - Date.now()) / 1000);
-    row.innerHTML = `<span>${room.kind === "chest" ? "🎁" : "👜"}</span>
+    row.innerHTML = `<span>${room.kind === "chest" ? "🎁" : room.kind === "live" ? "💸" : "👜"}</span>
       <span class="u"></span><span class="c"></span><span class="c"></span>
       <span class="t">${left > 0 ? fmtClock(left) : "●"}</span>`;
     row.querySelector(".u").textContent = "@" + (room.user || "—");
     const cells = row.querySelectorAll(".c");
     cells[0].textContent = fmtNum(room.coins);
-    cells[1].textContent = "×" + (room.ratio ?? 0).toFixed(1);
+    cells[1].textContent = room.kind === "live"
+      ? `${fmtNum(Math.round(room.diamonds_per_min || 0))}/${state.prefs.lang === "en" ? "m" : "dk"}`
+      : "×" + (room.ratio ?? 0).toFixed(1);
     row.onclick = () => openRoom(room);
     listEl.appendChild(row);
   }

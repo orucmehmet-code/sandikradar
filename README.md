@@ -63,6 +63,35 @@ gelmezse **önceki liste korunur** (panel boşalmaz, `data/meta.json` içinde ha
 Elde edilen alanlar: `diamond_count` → jeton, `people_count` → kontenjan, `unpack_at` → açılış
 anı, `skin_id` → sandık/çanta türü, `envelope_id` → kararlı kimlik.
 
+## 2a) İki katmanlı mantık: hediye jetonu akışı + zarf gelirse sandık
+
+`collect.py` her dinlenen odada **iki olayı** birlikte işler:
+
+| Olay | Ne üretir | Panelde |
+|---|---|---|
+| `GiftEvent` (hediye) | odanın jeton akışı: toplam jeton, dakikalık hız, gönderen sayısı, ilk 3 gönderen | **Jeton akışı** sekmesi (`kind: "live"`) |
+| `EnvelopeEvent` (zarf) | sandık satırı: jeton, kontenjan, açılış anı, tür | **Sandık** sekmesi (`kind: "chest"`) |
+
+Yani zarf gelmese de panel boş kalmaz: hediyelerden ölçülen gerçek jeton trafiği görünür.
+Bir odada zarf yakalanırsa hem sandık satırı eklenir hem de o odanın akış satırı
+`envelope_id` (→ `has_envelope`) ile "sandık var" diye işaretlenir.
+
+- Combo hediyeler `repeat_count` farkı üzerinden sayılır (`livecore.GiftFlow`): 1-2-3 diye
+  gelen tek bir combo 3 hediye sayılır, akış şişmez. Yeni combo turu baştan sayılır.
+- `diamonds_per_min` = toplam jeton / gerçek dinleme süresi × 60 (abartılı hız çıkmasın diye
+  pencere tüm dinleme süresidir).
+- Ham kayıtlar `data/gifts.jsonl` ve `data/envelopes.jsonl` dosyalarına yazılır (repoya girmez).
+- Alan eşlemesi kütüphane sürümleri arasında esnektir (`diamond_count` / `diamonds`,
+  `unique_id` / `user_id`, `repeat_count` / `repeatCount`).
+
+Çevrimdışı doğrulama (ağ/TikTokLive gerekmez):
+
+```bash
+python tools/selftest.py        # GiftFlow sayımı, zarf işaretleme, sekme sayaçları
+python tools/selftest_live.py   # sahte TikTokLive ile uçtan uca _capture akışı
+```
+
+
 ## 2b) Veri pompası — GitHub cron'u tetiklenmiyorsa (bu depoda öyle)
 
 Bu depoda GitHub'ın zamanlanmış işleri hiç çalışmadı: `event=schedule → total_count: 0`

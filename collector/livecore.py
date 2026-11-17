@@ -35,6 +35,9 @@ TABS: list[dict] = [
      "filter": {"kind": "chest"}},
     {"id": "bag", "label": {"tr": "Çanta", "vi": "Túi", "en": "Bag"}, "plan": "free",
      "filter": {"kind": "bag"}},
+    # Jeton akisi: zarf (sandik) gelmese de hediyelerden olculen gercek jeton trafigi.
+    {"id": "flow", "label": {"tr": "Jeton akışı", "vi": "Dòng xu", "en": "Coin flow"}, "plan": "free",
+     "filter": {"kind": "live"}},
     {"id": "ratio2", "label": {"tr": "Oran ≥ 2", "vi": "Ratio ≥ 2", "en": "Ratio ≥ 2"}, "plan": "plus",
      "filter": {"min_ratio": 2}},
     {"id": "ratio4", "label": {"tr": "Oran ≥ 4", "vi": "Ratio ≥ 4", "en": "Ratio ≥ 4"}, "plan": "plus",
@@ -63,12 +66,16 @@ def derive(room: dict, now_ms: int) -> dict:
     out = dict(room)
     # LiveMira'daki "ratio" = 1000 jeton basina dusen kontenjan payi.
     out["ratio"] = round(coins / slots / 1000, 2)
+    if out.get("kind") == "live":
+        # Jeton akisi satirinda "ratio" = dakikada akan bin jeton (sandik orani degil).
+        out["ratio"] = round(float(room.get("diamonds_per_min") or 0) / 1000, 2)
     out["seconds_left"] = round(left / 1000)
     out["delta"] = round((opens_at - now_ms) / 1000)
     out["status"] = "open" if left <= 0 else "upcoming"
     out["viewers_lt_slots"] = bool(int(room.get("viewers") or 0) < slots)
     if out.get("kind") == "bag" and out.get("joined"):
         out["odds"] = round(slots / max(1, int(out["joined"])), 3)
+    out["has_envelope"] = bool(room.get("envelope_id"))
     return out
 
 
@@ -208,6 +215,16 @@ _TITLES_BAG = [
     "Free coins bag — hurry up",
     "Akşam çantası, herkese yeter",
 ]
+_TITLES_FLOW = [
+    "Hediye yağıyor, sandık ne zaman? 🎁",
+    "Rương sắp thả — jeton akışı hızlı",
+    "Top hediye atıyor, kaçırmayın",
+    "Tặng quà liên tục, rương đâu?",
+    "500k jeton aktı, sandık yok",
+    "Yayın sıcak: jeton akışı yüksek",
+    "Ai tặng nhiều nhất hôm nay?",
+    "Jeton akışı takipte — zarf düşerse sandık",
+]
 
 
 def _pick_name(rng: random.Random) -> str:
@@ -346,19 +363,24 @@ SKIN_KINDS = {1: ("chest", "normal"), 2: ("chest", "gold"), 3: ("chest", "hangin
 
 
 def chest_from_envelope_fields(fields: dict, meta: dict | None = None) -> dict | None:
-    """Websocket zarf alanlari -> uygulama oda sozlugu (TikTokLive bagimsiz)."""
-    coins = int(fields.get("diamond_count") or 0)
-    slots = int(fields.get("people_count") or 0)
+    """Websocket zarf alanlari -> uygulama oda sozlugu (TikTokLive bagimsiz).
+
+    Alan adlari snake_case ya da camelCase gelebilir; ikisi de kabul edilir.
+    diamond_count/people_count sifir olan zarflar (bazi yayinlarda zarf sadece
+    duyuru olarak dusuyor) sandik sayilmaz, ama ham kayit JSONL'e yazilir.
+    """
+    coins = int(fields.get("diamond_count") or fields.get("diamondCount") or 0)
+    slots = int(fields.get("people_count") or fields.get("peopleCount") or 0)
     if coins <= 0 and slots <= 0:
         return None
-    skin = int(fields.get("skin_id") or 0)
+    skin = int(fields.get("skin_id") or fields.get("skinId") or 0)
     kind, variant = SKIN_KINDS.get(skin, ("chest", "normal"))
-    unpack_at = int(fields.get("unpack_at") or 0)
+    unpack_at = int(fields.get("unpack_at") or fields.get("unpackAt") or 0)
     if unpack_at <= 0:
         unpack_at = int(time.time()) + 180
     meta = meta or {}
-    room_id = str(fields.get("room_id") or meta.get("room_id") or "")
-    envelope_id = str(fields.get("envelope_id") or "")
+    room_id = str(fields.get("room_id") or fields.get("roomId") or meta.get("room_id") or "")
+    envelope_id = str(fields.get("envelope_id") or fields.get("envelopeId") or "")
     rid = envelope_id or f"{room_id}-{unpack_at}"
     return {
         "id": f"chest:{rid}",
@@ -380,6 +402,180 @@ def chest_from_envelope_fields(fields: dict, meta: dict | None = None) -> dict |
         "envelope_id": envelope_id,
         "source": "envelope",
     }
+
+
+# ---------------------------------------------------- hediye jetonu akisi (yeni)
+def gift_room(meta: dict, flow: dict, now_ms: int | None = None) -> dict:
+    """Hediye mesajlarindan olculen jeton akisini panel satirina cevir.
+
+    flow: {"diamonds": int, "events": int, "senders": int, "top": [[user, diamonds], ...],
+           "seconds": float, "envelope_id": str|None}
+    Sandik zarfı yakalanirsa ayni satir `envelope_id` ile isaretlenir; zarf hic
+    gelmese de satir jeton trafigiyle panelde gorunur.
+    """
+    now_ms = int(now_ms or time.time() * 1000)
+    seconds = float(flow.get("seconds") or 0) or 1.0
+    diamonds = int(flow.get("diamonds") or 0)
+    senders = max(1, int(flow.get("senders") or 0))
+    per_min = diamonds / seconds * 60.0
+    return {
+        "id": f"live:{meta.get('room_id') or meta.get('user')}",
+        "user": meta.get("user", ""),
+        "nickname": meta.get("nickname", "") or meta.get("user", ""),
+        "avatar": meta.get("avatar", ""),
+        "title": meta.get("title", ""),
+        "kind": "live",
+        "variant": "flow",
+        "coins": diamonds,
+        "slots": senders,
+        "joined": 0,
+        "viewers": int(meta.get("viewers") or 0),
+        "opens_at": now_ms,          # akis satiri her zaman "acik"
+        "room_id": str(meta.get("room_id") or ""),
+        "thumb": meta.get("thumb", ""),
+        "lang": meta.get("lang", "tr"),
+        "source": "gift-flow",
+        "gift_coins": diamonds,
+        "gift_events": int(flow.get("events") or 0),
+        "gift_senders": senders,
+        "gift_top": flow.get("top") or [],
+        "watched_seconds": round(seconds),
+        "diamonds_per_min": round(per_min, 1),
+        "envelope_id": flow.get("envelope_id") or "",
+    }
+
+
+class GiftFlow:
+    """Hediye (GiftEvent) mesajlarindan oda basina jeton akisi biriktirir.
+
+    Combo hediyelerde ayni (kullanici, hediye) icin artan `repeat_count` gelir;
+    yalnizca fark kadar jeton eklenir, boylece akis sismez. Combo turu bastan
+    baslarsa (repeat_count onceki degerden kucuk/esit) o mesaj yeni tur sayilir.
+
+    Kullanim:
+        flow = GiftFlow()
+        flow.add_gift("@hesap", meta, user="ayse", gift_id="5655", diamonds=1, repeat_count=3)
+        flow.mark_envelope("@hesap", meta, "env-123")
+        rows = flow.rows(window_seconds=150)   # -> gift_room satirlari
+    """
+
+    def __init__(self) -> None:
+        self._rooms: dict[str, dict] = {}
+
+    def touch(self, key: str, meta: dict | None = None) -> dict:
+        state = self._rooms.get(key)
+        if state is None:
+            state = {
+                "key": key,
+                # referans tutulur: izleyici sayisi gibi alanlar dinleme sirasinda guncellenir
+                "meta": meta if isinstance(meta, dict) else {},
+                "diamonds": 0, "events": 0, "senders": set(), "top": {}, "combo": {},
+                "envelope_id": "", "first_at": 0.0, "last_at": 0.0,
+            }
+            self._rooms[key] = state
+        elif meta and meta is not state["meta"]:
+            for k, v in meta.items():
+                if v not in (None, "", 0):
+                    state["meta"][k] = v
+        return state
+
+    def add_gift(self, key: str, meta: dict | None, user: str = "", gift_id: str | int = "",
+                 diamonds: int = 0, repeat_count: int = 1, repeat_end: bool = True,
+                 gift_name: str = "", now: float | None = None) -> int:
+        """Bir hediye mesajini isle, eklenen jeton miktarini dondur."""
+        diamonds = int(diamonds or 0)
+        if diamonds <= 0:
+            return 0
+        state = self.touch(key, meta)
+        now = float(now if now is not None else time.time())
+        count = int(repeat_count or 0)
+        sender = (user or "").lstrip("@") or "?"
+        combo = (sender, str(gift_id or gift_name or "?"))
+
+        prev = int(state["combo"].get(combo) or 0)
+        if count <= 0:
+            delta = 1
+        elif count <= prev:
+            delta = count          # yeni combo turu (sayac sifirlandi)
+        else:
+            delta = count - prev
+        state["combo"][combo] = count
+
+        gained = diamonds * max(1, delta)
+        state["diamonds"] += gained
+        state["events"] += 1
+        state["senders"].add(sender)
+        state["top"][sender] = int(state["top"].get(sender) or 0) + gained
+        if not state["first_at"]:
+            state["first_at"] = now
+        state["last_at"] = now
+        return gained
+
+    def mark_envelope(self, key: str, meta: dict | None = None, envelope_id: str = "") -> None:
+        """Odada zarf yakalandi: ayni jeton akisi satiri 'sandik var' olarak isaretlenir."""
+        state = self.touch(key, meta)
+        if envelope_id:
+            state["envelope_id"] = str(envelope_id)
+
+    def rooms(self) -> list[dict]:
+        return list(self._rooms.values())
+
+    def rows(self, now_ms: int | None = None, window_seconds: float = 0) -> list[dict]:
+        """Jeton akisi satirlari (kind='live'). Hediye gelmeyen odalar listelenmez."""
+        now_ms = int(now_ms or time.time() * 1000)
+        out = []
+        for state in self._rooms.values():
+            if int(state["diamonds"]) <= 0:
+                continue
+            start, end = state["first_at"], state["last_at"]
+            span = max(1.0, (end - start)) if (start and end) else 1.0
+            # Gozlem penceresi verildiyse dakikalik hiz ona gore hesaplanir; yoksa
+            # ilk hediye ile son hediye arasi kullanilir.
+            seconds = float(window_seconds) if window_seconds and window_seconds > 0 else span
+            top = sorted(state["top"].items(), key=lambda kv: kv[1], reverse=True)[:3]
+            flow = {
+                "diamonds": int(state["diamonds"]),
+                "events": int(state["events"]),
+                "senders": len(state["senders"]),
+                "top": [[name, coins] for name, coins in top],
+                "seconds": max(1.0, seconds),
+                "envelope_id": state["envelope_id"],
+            }
+            out.append(gift_room(state["meta"], flow, now_ms))
+        return out
+
+
+def sim_flow_rooms(now_ms: int | None = None, size: int = 28) -> list[dict]:
+    """DEMO jeton akisi: arayuzun 'Jeton akışı' sekmesini gercek veri olmadan denemek icin."""
+    now_ms = int(now_ms or time.time() * 1000)
+    bucket = now_ms // 60_000
+    out = []
+    for i in range(size):
+        rng = random.Random(bucket * 7919 + i * 131)
+        name = _pick_name(rng)
+        diamonds = int(math.exp(rng.uniform(math.log(300), math.log(420_000))))
+        senders = max(1, int(6 + diamonds / 9000 * rng.uniform(0.2, 1.6)))
+        top = [[_pick_name(rng), int(diamonds * rng.uniform(0.08, 0.35))] for _ in range(3)]
+        top.sort(key=lambda kv: kv[1], reverse=True)
+        meta = {
+            "user": name,
+            "nickname": name.replace("_", " ").title(),
+            "avatar": AVATAR_SEED + name,
+            "title": rng.choice(_TITLES_FLOW),
+            "viewers": max(3, int(rng.choice([12, 80, 400, 2_000, 9_000]) * rng.uniform(0.6, 1.7))),
+            "room_id": f"sim-flow-{i}",
+            "lang": "tr" if rng.random() < 0.4 else "vi",
+        }
+        flow = {
+            "diamonds": diamonds,
+            "events": max(1, int(senders * rng.uniform(1.2, 4.0))),
+            "senders": senders,
+            "top": top,
+            "seconds": 150.0,
+            "envelope_id": f"sim-env-{bucket}-{i}" if rng.random() < 0.22 else "",
+        }
+        out.append(derive(gift_room(meta, flow, now_ms), now_ms))
+    return out
 
 
 # --------------------------------------------- gercek canli kontrolu (imzasiz)

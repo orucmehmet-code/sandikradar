@@ -1,6 +1,7 @@
 # yerel calisma dosyalari (repoya girmesin)
 data/alerts.json
 data/envelopes.jsonl
+data/gifts.jsonl
 docs/data/*.tmp
 __pycache__/
 *.pyc

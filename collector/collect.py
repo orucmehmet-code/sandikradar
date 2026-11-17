@@ -49,9 +49,83 @@ def parse_list(value: str) -> list[str]:
 
 
 # --------------------------------------------------------------- euler yakalama
+def _gift_fields(event) -> dict:
+    """TikTokLive GiftEvent -> jeton alanlari (kutuphane surumleri arasinda esnek).
+
+    `diamond_count` bazi surumlerde `gift.diamonds`, bazi protokollerde
+    `diamondCount` olarak gelir; hepsi denenir. Combo hediyede `repeat_count`
+    artarak gelir, gercek sayim GiftFlow icinde fark uzerinden yapilir.
+    """
+    gift = getattr(event, "gift", None)
+    user = getattr(event, "user", None)
+
+    diamonds = 0
+    for src in (gift, event):
+        if src is None:
+            continue
+        for attr in ("diamond_count", "diamondCount", "diamonds"):
+            val = getattr(src, attr, None)
+            if val in (None, ""):
+                continue
+            try:
+                diamonds = int(val)
+            except (TypeError, ValueError):
+                diamonds = 0
+            if diamonds:
+                break
+        if diamonds:
+            break
+
+    gift_id = ""
+    gift_name = ""
+    for src in (gift, event):
+        if src is None:
+            continue
+        gift_id = gift_id or str(getattr(src, "id", "") or getattr(src, "gift_id", "") or "")
+        gift_name = gift_name or str(getattr(src, "name", "") or "")
+
+    sender = ""
+    nickname = ""
+    if user is not None:
+        sender = str(getattr(user, "unique_id", "") or getattr(user, "uniqueId", "")
+                     or getattr(user, "user_id", "") or getattr(user, "id", "") or "")
+        nickname = str(getattr(user, "nickname", "") or "")
+
+    try:
+        repeat_count = int(getattr(event, "repeat_count", 0) or getattr(event, "repeatCount", 0) or 0)
+    except (TypeError, ValueError):
+        repeat_count = 0
+    repeat_end = bool(getattr(event, "repeat_end", True))
+
+    return {
+        "user": sender.lstrip("@"),
+        "nickname": nickname,
+        "gift_id": gift_id,
+        "gift_name": gift_name,
+        "diamonds": diamonds,
+        "repeat_count": repeat_count,
+        "repeat_end": repeat_end,
+    }
+
+
+def _envelope_fields(info, meta: dict) -> dict:
+    return {
+        "envelope_id": str(getattr(info, "envelope_id", "") or ""),
+        "room_id": str(getattr(info, "room_id", "") or meta.get("room_id") or ""),
+        "diamond_count": int(getattr(info, "diamond_count", 0) or 0),
+        "people_count": int(getattr(info, "people_count", 0) or 0),
+        "unpack_at": int(getattr(info, "unpack_at", 0) or 0),
+        "skin_id": int(getattr(info, "skin_id", 0) or 0),
+    }
+
+
 async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                    seconds: int, max_rooms: int) -> tuple[list[dict], str]:
-    """Feed ile hedef odalari bul, websocket zarflarindan sandik/canta cikar.
+    """Feed ile hedef odalari bul; hediyelerden jeton akisi, zarf gelirse sandik cikar.
+
+    Mantik: her dinlenen odada GiftEvent'ler jeton akisina (kind='live') yazilir.
+    Sandik yalnizca EnvelopeEvent yakalanirsa listeye girer (kind='chest'); ayni
+    odanin akis satiri da `envelope_id` ile "sandik var" olarak isaretlenir.
 
     Sirasi onemli: once feed denenir (anahtar/plan hatasi dogrudan gorunur), sonra
     kutuphane import edilir. Kutuphane yoksa bile feed'in ne dedigi raporlanir.
@@ -81,42 +155,64 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
 
     try:
         from TikTokLive import TikTokLiveClient  # type: ignore
-        from TikTokLive.events import EnvelopeEvent  # type: ignore
+        from TikTokLive.events import EnvelopeEvent, GiftEvent  # type: ignore
     except Exception as exc:
         msg = (f"TikTokLive yok ({type(exc).__name__}); feed {len(targets)} oda dondurdu "
                f"ama canli yakalama yapilamadi")
         return [], (msg + (f" | feed: {feed_error}" if feed_error else ""))
 
+    try:  # izleyici sayisini canli tutmak icin (surumde yoksa atlanir)
+        from TikTokLive.events import ViewerCountEvent  # type: ignore
+    except Exception:
+        ViewerCountEvent = None  # type: ignore[assignment]
+
     picked = sorted(targets.values(), key=lambda r: int(r.get("viewers") or 0), reverse=True)[:max_rooms]
     log(f"dinlenecek oda: {len(picked)} / {len(targets)}")
 
-    found: dict[str, dict] = {}
-    seen_raw: list[dict] = []
+    flows = L.GiftFlow()
+    chests: dict[str, dict] = {}
+    raw_envelopes: list[dict] = []
+    raw_gifts: list[dict] = []
+    started = time.time()
 
     async def watch(meta: dict) -> None:
         handle = meta.get("user") or ""
         if not handle:
             return
+        room_key = f"@{handle}"
         client = TikTokLiveClient(unique_id=handle)
+
+        @client.on(GiftEvent)  # type: ignore[misc]
+        async def _on_gift(event):  # noqa: ANN001
+            fields = _gift_fields(event)
+            gained = flows.add_gift(room_key, meta, user=fields["user"], gift_id=fields["gift_id"],
+                                    diamonds=fields["diamonds"], repeat_count=fields["repeat_count"],
+                                    repeat_end=fields["repeat_end"], gift_name=fields["gift_name"])
+            raw_gifts.append({**fields, "room": handle, "gained": gained, "at": int(time.time())})
+            if gained:
+                who = fields["nickname"] or fields["user"] or "?"
+                what = fields["gift_name"] or fields["gift_id"] or "hediye"
+                log(f"jeton: @{handle} +{gained} ({who} → {what})")
 
         @client.on(EnvelopeEvent)  # type: ignore[misc]
         async def _on_envelope(event):  # noqa: ANN001
             info = getattr(event, "envelope_info", None)
             if info is None:
                 return
-            fields = {
-                "envelope_id": str(getattr(info, "envelope_id", "") or ""),
-                "room_id": str(getattr(info, "room_id", "") or meta.get("room_id") or ""),
-                "diamond_count": int(getattr(info, "diamond_count", 0) or 0),
-                "people_count": int(getattr(info, "people_count", 0) or 0),
-                "unpack_at": int(getattr(info, "unpack_at", 0) or 0),
-                "skin_id": int(getattr(info, "skin_id", 0) or 0),
-            }
-            seen_raw.append({**fields, "user": handle, "at": int(time.time())})
+            fields = _envelope_fields(info, meta)
+            raw_envelopes.append({**fields, "user": handle, "at": int(time.time())})
+            flows.mark_envelope(room_key, meta, fields["envelope_id"])
             chest = L.chest_from_envelope_fields(fields, meta)
             if chest:
-                found[chest["id"]] = chest
+                chests[chest["id"]] = chest
                 log(f"sandik: @{handle} {chest['coins']} jeton / {chest['slots']} kisi")
+
+        if ViewerCountEvent is not None:
+            @client.on(ViewerCountEvent)  # type: ignore[misc]
+            async def _on_viewers(event):  # noqa: ANN001
+                count = int(getattr(event, "viewer_count", 0) or getattr(event, "count", 0) or 0)
+                if count > 0:
+                    meta["viewers"] = count
 
         try:
             await client.connect()
@@ -133,22 +229,40 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    if seen_raw:
-        try:
-            logfile = ROOT / "data" / "envelopes.jsonl"
-            logfile.parent.mkdir(parents=True, exist_ok=True)
-            with logfile.open("a", encoding="utf-8") as fh:
-                for row in seen_raw:
-                    fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
+    window = max(1.0, time.time() - started)
+    _append_jsonl("envelopes.jsonl", raw_envelopes)
+    _append_jsonl("gifts.jsonl", raw_gifts)
+
+    flow_rows = flows.rows(int(time.time() * 1000), window_seconds=window)
+    if flow_rows:
+        log(f"jeton akisi: {len(flow_rows)} oda, "
+            f"{sum(int(r.get('gift_coins') or 0) for r in flow_rows)} jeton / {round(window)} sn")
+
+    rooms = sorted(list(chests.values()) + flow_rows,
+                   key=lambda r: int(r.get("coins") or 0), reverse=True)
 
     detail = ""
-    if not found and feed_error:
+    if not rooms and feed_error:
         detail = feed_error
-    elif not found:
-        detail = "dinleme suresinde sandik zarfi gelmedi"
-    return list(found.values()), detail
+    elif not rooms:
+        detail = f"dinlenen {len(picked)} odada hediye/zarf gelmedi"
+    elif not chests:
+        detail = "jeton akisi olculdu, dinleme suresinde sandik zarfi gelmedi"
+    return rooms, detail
+
+
+def _append_jsonl(name: str, rows: list[dict]) -> None:
+    """Ham websocket kayitlarini data/<name> altina ekle (hata olsa da is surer)."""
+    if not rows:
+        return
+    try:
+        logfile = ROOT / "data" / name
+        logfile.parent.mkdir(parents=True, exist_ok=True)
+        with logfile.open("a", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def collect_euler(seconds: int, max_rooms: int) -> tuple[list[dict], str]:
@@ -205,17 +319,17 @@ def main() -> int:
     log(f"provider={provider} out={out_dir}")
 
     if provider == "sim":
-        rooms = L.sim_rooms(now)
+        rooms = L.sim_rooms(now) + L.sim_flow_rooms(now)
         snap = L.build_snapshot("sim", rooms, now, demo=True,
                                 notice="DEMO veri — gercek TikTok yayini degil. "
-                                       "Gercek sandik icin EULER_API_KEY ekle.")
+                                       "Gercek sandik/jeton akisi icin EULER_API_KEY ekle.")
         write_output(out_dir, snap)
         return 0
 
     rooms, detail = collect_euler(max(15, args.seconds), max(1, args.max_rooms))
     if rooms:
         snap = L.build_snapshot("euler", rooms, now, demo=False,
-                                notice="EulerStream feed + websocket zarf yakalama")
+                                notice="EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama")
         write_output(out_dir, snap)
         return 0
 
