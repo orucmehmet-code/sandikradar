@@ -120,10 +120,23 @@ function variantLabel(room) {
 
 /* --------------------------------------------------------------------- ses */
 let audioCtx = null;
+// Otomatik oynatma politikası: AudioContext ilk kullanıcı hareketine kadar "suspended"
+// kalır. İlk dokunuş/tıklamada açıyoruz, yoksa ilk uyarı sesi duyulmaz.
+function unlockAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => { });
+  } catch { /* ses desteklenmiyor */ }
+}
+for (const ev of ["pointerdown", "keydown", "touchstart"]) {
+  window.addEventListener(ev, unlockAudio, { once: true, passive: true });
+}
+
 function beep(freq = 880, dur = 0.12, gain = 0.06) {
   if (!state.prefs.sound) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => { });
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = "sine"; o.frequency.value = freq; g.gain.value = gain;
@@ -620,9 +633,15 @@ async function sendTelegram(text) {
     });
     return res.json();
   }
+  // DİKKAT: application/json gönderimi CORS preflight (OPTIONS) tetikler ve Telegram
+  // preflight'a izin vermez → tarayıcı "Failed to fetch" verir. Form-urlencoded
+  // "basit istek" sayılır, preflight yok, yanıt okunabilir (doğrulandı 2026-11).
+  const form = new URLSearchParams({
+    chat_id: String(tg.chat_id), text,
+    parse_mode: "HTML", disable_web_page_preview: "true",
+  });
   const res = await fetch(`https://api.telegram.org/bot${tg.bot_token}/sendMessage`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: tg.chat_id, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    method: "POST", body: form,
   });
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok && data.ok !== false, detail: data.description || (res.ok ? "" : "HTTP " + res.status) };

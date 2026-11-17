@@ -151,15 +151,22 @@ bu yüzden GitHub Pages'te sunucu gerekmez.
 
 ## Ne çalışır, ne çalışmaz (dürüst tablo)
 
-| Yetenek | GitHub Pages (statik) | Yerel köprü |
-|---|---|---|
-| Liste, sekmeler, filtre, sıralama, geri sayım | ✅ | ✅ |
-| Mini pencere, ses, bildirim, tema/dil, PWA | ✅ | ✅ |
-| Veri tazeliği | pompa turu (10 dk) ya da elle **Run workflow** | 20 sn (canlı) |
-| Gerçek canlı link kontrolü | ❌ (tarayıcıda CORS) | ✅ |
-| Telegram uyarısı | ✅ (tarayıcıdan doğrudan; token cihazda saklanır) | ✅ (sunucu tarafı) |
-| Gerçek sandık verisi | `EULER_API_KEY` secret varsa ✅, yoksa DEMO | `collect.py --provider euler` sonrası ✅ |
-| SSE ile anlık olay akışı | ❌ (yoklama) | ✅ |
+Her satır bu depoda **gerçekten koşularak** doğrulandı (2026-11-17). "Doğrulama" kolonu neyin
+ölçüldüğünü söyler; ölçülmeyen şey ✅ diye işaretlenmedi.
+
+| Yetenek | GitHub Pages (statik) | Yerel köprü | Doğrulama / sınır |
+|---|---|---|---|
+| Liste, sekmeler, filtre, sıralama, geri sayım | ✅ | ✅ | 220 oda, 8 sekme sayacı, 5 sıralama, oran≥4 → 83 kart; konsol hatası 0 |
+| Mini pencere (+ PiP), tema/dil, yazı boyutu | ✅ | ✅ | PiP açıldı, 12 satır; TR/EN/VI etiketler değişti |
+| Ses uyarısı | ✅ (ilk dokunuştan sonra) | ✅ | `AudioContext` ilk tıklamada açılıyor; tarayıcı otomatik oynatmayı engellediği için ilk kullanıcı hareketi şart |
+| Tarayıcı bildirimi | ✅ (izin verilirse) | ✅ | İzin verilmemişken sessizce atlıyor, hata fırlatmıyor |
+| PWA / çevrimdışı | ✅ (son liste, "⚠ veri eski") | ✅ | Ağ kapatıldı: kabuk + 125 kart önbellekten geldi, yaş etiketi "veri eski" |
+| Veri tazeliği | pompa turu (10 dk) ya da **Run workflow** | 20 sn (canlı) | Görev 10:00 ve 10:09'da koştu, `Last Result: 0`, her tur commit + deploy |
+| Gerçek canlı link kontrolü | ❌ | ✅ | Statik sayfadan TikTok uçları **CORS başlığı dönmediği için** "Failed to fetch"; köprüde `@beinsports → YAYINDA, 5.8K izleyici, id 7706853078218984210` |
+| Telegram uyarısı | ✅ (token cihazda saklanır) | ✅ (sunucu tarafı) | Tarayıcıdan `sendMessage` yalnızca **form-urlencoded** gövdeyle geçiyor (JSON gövde preflight'a takılıyor, "Failed to fetch"); sahte token → `✗ Unauthorized` yanıtı okundu, yani taşıma çalışıyor. Gerçek gönderim geçerli token ister |
+| Gerçek sandık verisi | `EULER_API_KEY` secret varsa ✅ | `collect.py --provider euler` | Yol doğrulandı: feed çağrısı gerçek `401 {"message":"The provided API Key is invalid."}` döndürüyor ve işçi önceki listeyi `stale: true` ile koruyor. **Business planlı anahtarla uçtan uca denenmedi** (elimde anahtar yok) |
+| SSE ile anlık olay akışı | ❌ (yoklama) | ✅ | `/api/stream` `new_room` olayı gönderdi, panel tazelendi |
+| HTTPS sayfadan köprüye erişim | ⚠ tarayıcı iznine bağlı | — | Chrome 145 `local-network-access` izni otomatik `denied`; Ayarlar → **Aç** ile panel köprü adresinde açılıyor |
 
 **DEMO rozeti** görünüyorsa odalar gerçek değildir. `data/rooms.json` içindeki
 `"demo": true` alanı bunu belirler; sahte `room_id` üretilmez, böylece "KATIL" düğmesi

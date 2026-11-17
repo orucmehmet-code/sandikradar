@@ -125,6 +125,8 @@
     }
   ],
   "notice": "DEMO veri — gercek TikTok yayini degil. Gercek sandik icin EULER_API_KEY ekle.",
-  "error": "",
+  "error": "401 — Business plan gerekli ya da anahtar gecersiz: {\"code\":401,\"message\":\"The provided API Key is invalid.\"}",
+  "stale": true,
+  "last_attempt": 1794900018034,
   "rooms": 220
 }

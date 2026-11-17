@@ -51,13 +51,11 @@ def parse_list(value: str) -> list[str]:
 # --------------------------------------------------------------- euler yakalama
 async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                    seconds: int, max_rooms: int) -> tuple[list[dict], str]:
-    """Feed ile hedef odalari bul, websocket zarflarindan sandik/canta cikar."""
-    try:
-        from TikTokLive import TikTokLiveClient  # type: ignore
-        from TikTokLive.events import EnvelopeEvent  # type: ignore
-    except Exception as exc:
-        return [], f"TikTokLive kurulu degil ({type(exc).__name__}) — sadece feed kullanilabilir"
+    """Feed ile hedef odalari bul, websocket zarflarindan sandik/canta cikar.
 
+    Sirasi onemli: once feed denenir (anahtar/plan hatasi dogrudan gorunur), sonra
+    kutuphane import edilir. Kutuphane yoksa bile feed'in ne dedigi raporlanir.
+    """
     targets: dict[str, dict] = {}
     feed_error = ""
     if api_key:
@@ -80,6 +78,14 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
 
     if not targets:
         return [], feed_error or "hedef oda yok (feed bos, izleme listesi bos)"
+
+    try:
+        from TikTokLive import TikTokLiveClient  # type: ignore
+        from TikTokLive.events import EnvelopeEvent  # type: ignore
+    except Exception as exc:
+        msg = (f"TikTokLive yok ({type(exc).__name__}); feed {len(targets)} oda dondurdu "
+               f"ama canli yakalama yapilamadi")
+        return [], (msg + (f" | feed: {feed_error}" if feed_error else ""))
 
     picked = sorted(targets.values(), key=lambda r: int(r.get("viewers") or 0), reverse=True)[:max_rooms]
     log(f"dinlenecek oda: {len(picked)} / {len(targets)}")
