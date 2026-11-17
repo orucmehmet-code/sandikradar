@@ -63,6 +63,30 @@ gelmezse **önceki liste korunur** (panel boşalmaz, `data/meta.json` içinde ha
 Elde edilen alanlar: `diamond_count` → jeton, `people_count` → kontenjan, `unpack_at` → açılış
 anı, `skin_id` → sandık/çanta türü, `envelope_id` → kararlı kimlik.
 
+## 2b) Veri pompası — GitHub cron'u tetiklenmiyorsa (bu depoda öyle)
+
+Bu depoda GitHub'ın zamanlanmış işleri hiç çalışmadı: `event=schedule → total_count: 0`
+(4 elle tetikleme başarılı, planlı hiç koşu yok — bilinen bir GitHub sorunu). Aynı işi kendi
+bilgisayarın yapar:
+
+```bash
+python tools/pump.py                 # topla → değiştiyse commit → push → Pages otomatik yayınlar
+python tools/pump.py --dry-run        # sadece topla
+```
+
+Windows'ta 10 dakikada bir otomatik (zaten kurulu, görev adı `SandikRadarPump`):
+
+```bat
+schtasks /Create /TN SandikRadarPump /SC MINUTE /MO 10 /F ^
+  /TR "C:\...\sandikradar-web\tools\pump.bat"
+schtasks /Run    /TN SandikRadarPump     :: hemen bir tur
+schtasks /Delete /TN SandikRadarPump /F  :: kapat
+```
+
+Doğrulanan akış: görev → `collect.py` → commit → push → `deploy-pages` (17–21 sn) →
+Pages'teki `data/rooms.json` tazelenir. Push'lar kullanıcı hesabıyla yapıldığı için
+`deploy-pages` kendiliğinden tetiklenir (bot push'unda tetiklenmez).
+
 ## 3) Yerel çalıştırma (pip yok, FastAPI yok)
 
 En kısa yol: kök dizindeki **`BASLAT.bat`** (Windows) veya `./local-server/baslat.sh`.
@@ -131,7 +155,7 @@ bu yüzden GitHub Pages'te sunucu gerekmez.
 |---|---|---|
 | Liste, sekmeler, filtre, sıralama, geri sayım | ✅ | ✅ |
 | Mini pencere, ses, bildirim, tema/dil, PWA | ✅ | ✅ |
-| Veri tazeliği | Actions turu (≈5 dk, pratikte 5–15 dk) | 20 sn (canlı) |
+| Veri tazeliği | pompa turu (10 dk) ya da elle **Run workflow** | 20 sn (canlı) |
 | Gerçek canlı link kontrolü | ❌ (tarayıcıda CORS) | ✅ |
 | Telegram uyarısı | ✅ (tarayıcıdan doğrudan; token cihazda saklanır) | ✅ (sunucu tarafı) |
 | Gerçek sandık verisi | `EULER_API_KEY` secret varsa ✅, yoksa DEMO | `collect.py --provider euler` sonrası ✅ |
