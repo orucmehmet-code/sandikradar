@@ -60,6 +60,8 @@ def main() -> int:
     ap.add_argument("--provider", default=os.environ.get("DATA_PROVIDER", "auto"),
                     choices=["auto", "sim", "euler"])
     ap.add_argument("--seconds", type=int, default=int(os.environ.get("CAPTURE_SECONDS", "150")))
+    ap.add_argument("--watch", default=os.environ.get("WATCHLIST", ""),
+                    help="izlenecek hesaplar '@a,@b' (boşsa data/watchlist.txt okunur)")
     ap.add_argument("--dry-run", action="store_true", help="topla ama commit/push etme")
     args = ap.parse_args()
 
@@ -70,6 +72,8 @@ def main() -> int:
     # 1) veriyi topla
     collect = [sys.executable, str(ROOT / "collector" / "collect.py"),
                "--provider", args.provider, "--seconds", str(args.seconds)]
+    if args.watch:
+        collect += ["--watch", args.watch]
     res = run(collect)
     for line in (res.stdout or "").splitlines():
         log("  " + line)

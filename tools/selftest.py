@@ -147,10 +147,55 @@ def test_snapshot_counts() -> None:
     json.dumps(snap)  # serileştirilebilir olmalı
 
 
+def test_runtime_proto() -> None:
+    """Kurulu TikTokLive varsa gerçek proto alan adlarını doğrula (alanlar değişirse kırılır)."""
+    print("kurulu TikTokLive protosu")
+    try:
+        from TikTokLive.events import GiftEvent  # type: ignore
+    except Exception:
+        print("  atla  TikTokLive kurulu değil (py -3.12 -m pip install TikTokLive)")
+        return
+    gift_fields = GiftEvent._betterproto.sorted_field_names
+    for name in ("gift", "gift_id", "repeat_count", "repeat_end", "user"):
+        check(f"GiftEvent.{name}", name in gift_fields, True)
+    gift_cls = GiftEvent._betterproto.cls_by_field["gift"]
+    for name in ("diamond_count", "name", "id"):
+        check(f"Gift.{name}", name in gift_cls._betterproto.sorted_field_names, True)
+
+    from TikTokLive.events import EnvelopeEvent  # type: ignore
+    env_cls = EnvelopeEvent._betterproto.cls_by_field["envelope_info"]
+    for name in ("envelope_id", "diamond_count", "people_count", "unpack_at", "skin_id", "room_id"):
+        check(f"EnvelopeInfo.{name}", name in env_cls._betterproto.sorted_field_names, True)
+
+    # gerçek sınıflarla uçtan uca eşleme
+    user = gift_cls._betterproto  # noqa: F841  (sadece varlık kontrolü)
+    from TikTokLive.proto.custom_proto import ExtendedGift, ExtendedUser  # type: ignore
+    u = ExtendedUser()
+    u.id = 1
+    u.nickname = "Ayşe"
+    u.display_id = "ayse"
+    g = ExtendedGift()
+    g.id = 5655
+    g.name = "Rose"
+    g.diamond_count = 2
+    ev = GiftEvent()
+    ev.user = u
+    ev.gift = g
+    ev.gift_id = 5655
+    ev.repeat_count = 2
+    ev.repeat_end = 1
+    f = C._gift_fields(ev)
+    check("gerçek event: gönderen", f["user"], "ayse")
+    check("gerçek event: jeton", f["diamonds"], 2)
+    check("gerçek event: hediye", f["gift_name"], "Rose")
+    check("gerçek event: combo", f["repeat_count"], 2)
+
+
 def main() -> int:
     test_gift_flow()
     test_event_fields()
     test_snapshot_counts()
+    test_runtime_proto()
     print()
     if FAILS:
         print(f"{len(FAILS)} test BASARISIZ: {', '.join(FAILS)}")

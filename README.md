@@ -91,6 +91,36 @@ python tools/selftest.py        # GiftFlow sayımı, zarf işaretleme, sekme say
 python tools/selftest_live.py   # sahte TikTokLive ile uçtan uca _capture akışı
 ```
 
+`selftest.py` kurulu TikTokLive paketi varsa **gerçek proto alanlarını** da doğrular
+(`GiftEvent.gift.diamond_count`, `EnvelopeInfo.people_count`, …). Kütüphane sürüm
+yükseltmesi alan adlarını değiştirirse test kırmızı olur.
+
+## 2a-2) Gerçek yakalama: hesap listesi (`data/watchlist.txt`)
+
+EulerStream Business anahtarı olmadan da gerçek veri toplanabilir: dinlenecek hesapları
+yaz, toplayıcı o odalara websocket ile bağlanır.
+
+```text
+# data/watchlist.txt — bir satır bir hesap
+@hesap1
+@hesap2
+https://www.tiktok.com/@hesap3/live
+```
+
+- Dosyada en az bir dolu satır varsa `collect.py` **otomatik olarak gerçek moda** geçer
+  (`provider=euler`); boşsa panel DEMO'da kalır.
+- Öncelik: `WATCHLIST` ortam değişkeni → `data/watchlist.txt` → `--watch @a,@b`.
+- Elle deneme (dosyaya dokunmadan, çıktı geçici klasöre):
+
+```bash
+py -3.12 collector/collect.py --watch "@hesap1,@hesap2" --seconds 90 --out data/probe
+```
+
+- Bu makinede `TikTokLive` **py -3.12**'de kurulu (pompa de aynı yorumlayıcıyı kullanır:
+  `tools/pump.bat` → `py -3.12 tools\pump.py`). Bağlantı kurulamazsa `meta.json` içinde
+  sebep yazılır: `UserOfflineError` (hesap yayında değil), imza/anahtar hataları vb.
+
+
 
 ## 2b) Veri pompası — GitHub cron'u tetiklenmiyorsa (bu depoda öyle)
 

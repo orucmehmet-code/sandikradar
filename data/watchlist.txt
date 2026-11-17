@@ -1,0 +1,8 @@
+# İzlenecek hesaplar — bir satır bir hesap (WATCHLIST ortam değişkeni boşsa kullanılır).
+# Yorumlar # ile başlar. Örnek formatlar:
+#   @hesap1
+#   hesap2
+#   https://www.tiktok.com/@hesap3/live
+#
+# Bu dosyada en az bir satır doluysa toplayıcı DEMO yerine GERÇEK TikTok verisine geçer:
+# hediyelerden jeton akışı, zarf düşerse sandık listelenir. Dosya boşken panel DEMO'da kalır.

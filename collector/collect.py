@@ -25,6 +25,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -46,6 +47,32 @@ def env(name: str, default: str = "") -> str:
 
 def parse_list(value: str) -> list[str]:
     return [p.strip() for p in (value or "").replace(";", ",").split(",") if p.strip()]
+
+
+def watchlist_file() -> list[str]:
+    """`data/watchlist.txt` — WATCHLIST ortam degiskeni bossa buradan okunur.
+
+    Bir satir bir hesap: `@hesap`, `hesap` ya da `tiktok.com/@hesap/live` linki.
+    `#` ile baslayan satirlar ve bos satirlar yok sayilir.
+    """
+    path = ROOT / "data" / "watchlist.txt"
+    if not path.exists():
+        return []
+    out: list[str] = []
+    try:
+        for raw in path.read_text("utf-8", "replace").splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            for part in line.replace(";", ",").split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                m = re.search(r"tiktok\.com/@([A-Za-z0-9._]+)", part, re.I)
+                out.append(("@" + m.group(1)) if m else part)
+    except Exception as exc:
+        log(f"watchlist.txt okunamadi: {type(exc).__name__}")
+    return out
 
 
 # --------------------------------------------------------------- euler yakalama
@@ -161,10 +188,13 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                f"ama canli yakalama yapilamadi")
         return [], (msg + (f" | feed: {feed_error}" if feed_error else ""))
 
-    try:  # izleyici sayisini canli tutmak icin (surumde yoksa atlanir)
-        from TikTokLive.events import ViewerCountEvent  # type: ignore
-    except Exception:
-        ViewerCountEvent = None  # type: ignore[assignment]
+    # Izleyici sayisini canli tut: v7'de RoomUserSeqEvent, eski surumlerde ViewerCountEvent.
+    ViewerEvents: list = []
+    for name in ("RoomUserSeqEvent", "ViewerCountEvent"):
+        try:
+            ViewerEvents.append(getattr(__import__("TikTokLive.events", fromlist=[name]), name))
+        except Exception:
+            continue
 
     picked = sorted(targets.values(), key=lambda r: int(r.get("viewers") or 0), reverse=True)[:max_rooms]
     log(f"dinlenecek oda: {len(picked)} / {len(targets)}")
@@ -173,6 +203,7 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
     chests: dict[str, dict] = {}
     raw_envelopes: list[dict] = []
     raw_gifts: list[dict] = []
+    offline: dict[str, str] = {}
     started = time.time()
 
     async def watch(meta: dict) -> None:
@@ -207,10 +238,16 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                 chests[chest["id"]] = chest
                 log(f"sandik: @{handle} {chest['coins']} jeton / {chest['slots']} kisi")
 
-        if ViewerCountEvent is not None:
-            @client.on(ViewerCountEvent)  # type: ignore[misc]
+        for event_type in ViewerEvents:
+            @client.on(event_type)  # type: ignore[misc]
             async def _on_viewers(event):  # noqa: ANN001
-                count = int(getattr(event, "viewer_count", 0) or getattr(event, "count", 0) or 0)
+                count = 0
+                for attr in ("viewer_count", "count", "total", "total_user"):
+                    try:
+                        val = int(getattr(event, attr, 0) or 0)
+                    except (TypeError, ValueError):
+                        val = 0
+                    count = count or val
                 if count > 0:
                     meta["viewers"] = count
 
@@ -219,7 +256,9 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            log(f"@{handle}: baglanti hatasi ({type(exc).__name__}: {str(exc)[:80]})")
+            reason = type(exc).__name__
+            offline[handle] = reason
+            log(f"@{handle}: baglanti hatasi ({reason}: {str(exc)[:80]})")
 
     tasks = [asyncio.create_task(watch(meta)) for meta in picked]
     try:
@@ -242,7 +281,12 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                    key=lambda r: int(r.get("coins") or 0), reverse=True)
 
     detail = ""
-    if not rooms and feed_error:
+    if not rooms and len(offline) >= len(picked):
+        # Hicbir odaya baglanilamadi: sebebi net soyle (yayinda degil / anahtar / imza).
+        reasons = sorted({v for v in offline.values()})
+        detail = (f"{len(picked)} odanin hicbirine baglanilamadi: {', '.join(reasons)}"
+                  + (f" | feed: {feed_error}" if feed_error else ""))
+    elif not rooms and feed_error:
         detail = feed_error
     elif not rooms:
         detail = f"dinlenen {len(picked)} odada hediye/zarf gelmedi"
@@ -265,12 +309,16 @@ def _append_jsonl(name: str, rows: list[dict]) -> None:
         pass
 
 
-def collect_euler(seconds: int, max_rooms: int) -> tuple[list[dict], str]:
+def collect_euler(seconds: int, max_rooms: int, extra_watch: list[str] | None = None) -> tuple[list[dict], str]:
     api_key = env("EULER_API_KEY")
     regions = [r.upper() for r in parse_list(env("EULER_REGIONS", "TR"))] or ["TR"]
-    watchlist = parse_list(env("WATCHLIST"))
+    watchlist = parse_list(env("WATCHLIST")) or watchlist_file()
+    for handle in (extra_watch or []):
+        if handle and handle not in watchlist:
+            watchlist.append(handle)
     if not api_key and not watchlist:
-        return [], "EULER_API_KEY yok, WATCHLIST bos"
+        return [], "EULER_API_KEY yok, WATCHLIST bos (data/watchlist.txt de bos)"
+    log(f"izleme listesi: {len(watchlist)} hesap" + (f" ({', '.join(watchlist[:6])}…)" if len(watchlist) > 6 else f" ({', '.join(watchlist)})" if watchlist else ""))
     return asyncio.run(_capture(api_key, regions, watchlist, seconds, max_rooms))
 
 
@@ -305,15 +353,18 @@ def main() -> int:
     ap.add_argument("--seconds", type=int, default=int(env("CAPTURE_SECONDS", "150")))
     ap.add_argument("--max-rooms", type=int, default=int(env("MAX_ROOMS", "12")))
     ap.add_argument("--out", default=env("OUT_DIR", str(DEFAULT_OUT)))
+    ap.add_argument("--watch", default="",
+                    help="izlenecek hesaplar: '@a,@b' (WATCHLIST / data/watchlist.txt'e eklenir)")
     args = ap.parse_args()
 
     out_dir = Path(args.out)
     if not out_dir.is_absolute():
         out_dir = ROOT / out_dir
 
+    extra_watch = parse_list(args.watch)
     provider = args.provider
     if provider == "auto":
-        provider = "euler" if (env("EULER_API_KEY") or env("WATCHLIST")) else "sim"
+        provider = "euler" if (env("EULER_API_KEY") or env("WATCHLIST") or watchlist_file() or extra_watch) else "sim"
 
     now = int(time.time() * 1000)
     log(f"provider={provider} out={out_dir}")
@@ -326,7 +377,7 @@ def main() -> int:
         write_output(out_dir, snap)
         return 0
 
-    rooms, detail = collect_euler(max(15, args.seconds), max(1, args.max_rooms))
+    rooms, detail = collect_euler(max(15, args.seconds), max(1, args.max_rooms), extra_watch)
     if rooms:
         snap = L.build_snapshot("euler", rooms, now, demo=False,
                                 notice="EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama")
