@@ -1,7 +1,7 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794940142736,
+  "generated_at": 1794950942017,
   "provider": "euler",
   "demo": false,
   "refresh_seconds": 60,
@@ -138,8 +138,6 @@
     }
   ],
   "notice": "EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama",
-  "error": "dinlenen 3 odadan 1 tanesine baglanildi, dinleme suresinde hediye/zarf gelmedi",
-  "stale": true,
-  "last_attempt": 1794949141917,
+  "error": "",
   "rooms": 1
 }
