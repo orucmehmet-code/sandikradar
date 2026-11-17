@@ -175,13 +175,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("content-length", str(len(body)))
         self.send_header("cache-control", "no-store")
         self.send_header("access-control-allow-origin", "*")
+        self.send_header("access-control-allow-private-network", "true")
         self.end_headers()
         self.wfile.write(body)
 
     def _cors(self) -> None:
         self.send_header("access-control-allow-origin", "*")
-        self.send_header("access-control-allow-headers", "content-type")
+        self.send_header("access-control-allow-headers",
+                         self.headers.get("access-control-request-headers") or "content-type")
         self.send_header("access-control-allow-methods", "GET, POST, OPTIONS")
+        # Chrome Private Network Access: HTTPS sayfadan 127.0.0.1'e istek için şart
+        self.send_header("access-control-allow-private-network", "true")
+        self.send_header("access-control-max-age", "600")
 
     def _body(self) -> dict:
         try:

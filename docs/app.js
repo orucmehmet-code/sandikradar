@@ -241,6 +241,7 @@ async function fetchStatic() {
   if (!res.ok) throw new Error(res.status === 404 ? t("noData") : `HTTP ${res.status}`);
   const data = await res.json();
   state.data = data;
+  state.activeSource = "static";
   state.tabs = Array.isArray(data.tabs) && data.tabs.length ? data.tabs : FALLBACK_TABS;
   state.all = refreshRoomTimes(Array.isArray(data.rooms) ? data.rooms : []);
   state.lastUpdate = Number(data.generated_at) || Date.now();
@@ -259,6 +260,7 @@ async function fetchLocal() {
   if (!res.ok) throw new Error(`köprü HTTP ${res.status}`);
   const data = await res.json();
   state.data = data;
+  state.activeSource = "local";
   state.all = [];
   state.rooms = refreshRoomTimes(Array.isArray(data.rooms) ? data.rooms : []);
   state.tabCounts = data.tab_counts || {};
@@ -289,7 +291,7 @@ async function fetchData() {
     setStatus("err", err.message && err.message.length < 60 ? err.message : undefined);
     $("#offline").classList.remove("hidden");
     $("#offline").textContent = state.prefs.source === "local"
-      ? "Yerel köprüye ulaşılamadı — Ayarlar → Veri kaynağı."
+      ? "Yerel köprüye ulaşılamadı. Tarayıcı yerel ağ izni istediyse onayla; ya da paneli " + bridgeBase() + " adresinden aç."
       : t("offline");
   }
 }
@@ -771,9 +773,10 @@ function updateSourceHint() {
   if (state.prefs.source === "local") {
     box.textContent = state.bridgeOk
       ? "● yerel köprü bağlı: " + bridgeBase()
-      : "köprü test edilmedi — bilgisayarda local-server/bridge.py çalışıyor olmalı.";
+      : "köprüye ulaşılamadı — bilgisayarda local-server/bridge.py çalışıyor mu? Tarayıcı yerel ağ iznini reddettiyse "
+        + "paneli doğrudan " + bridgeBase() + " adresinden açabilirsin (aynı arayüz, canlı veri).";
   } else {
-    box.textContent = "● GitHub modu: data/rooms.json (Actions her 10 dakikada bir yeniler).";
+    box.textContent = "● GitHub modu: data/rooms.json (Actions işçisi ~5 dakikada bir yeniler).";
   }
 }
 
@@ -784,7 +787,7 @@ function updateDataInfo() {
   if (!d) { box.textContent = "—"; return; }
   const when = d.generated_at ? new Date(d.generated_at).toLocaleString() : "?";
   const bits = [
-    `kaynak: ${state.prefs.source === "local" ? "yerel köprü" : "data/rooms.json"}`,
+    `kaynak: ${state.activeSource === "local" ? "yerel köprü" : "data/rooms.json"}`,
     `sağlayıcı: ${d.provider || "?"}`,
     `üretildi: ${when}`,
     `gösterilen: ${state.rooms.length} / toplam: ${d.total ?? state.all.length ?? "?"}`,
@@ -935,6 +938,8 @@ $("#saveSettings").onclick = async () => {
   else { render(); }
   flash("✓");
 };
+
+$("#sBridgeOpen").onclick = () => window.open(bridgeBase() + "/", "_blank", "noopener");
 
 $("#sBridgeTest").onclick = async () => {
   const url = ($("#sBridge").value || "").trim().replace(/\/+$/, "");

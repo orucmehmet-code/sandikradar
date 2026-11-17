@@ -70,7 +70,13 @@ python local-server/bridge.py          # → http://127.0.0.1:8800
 ```
 
 Windows'ta `local-server/baslat.bat` çift tıkla. Panel aynı adresten açılır ve `local` moda
-otomatik geçer. Bu modda ek olarak şunlar çalışır:
+otomatik geçer (paneli **her zaman köprünün kendi adresinden** aç: `http://127.0.0.1:8800`).
+
+> **Tarayıcı notu:** GitHub Pages (HTTPS) sayfasından `http://127.0.0.1:8800`'e istek atmak
+> Chrome'un "yerel ağ erişimi" iznine bağlıdır. İzin penceresi çıkarsa onayla; çıkmıyorsa
+> Ayarlar → Veri kaynağı → **Aç** düğmesi aynı paneli köprü adresinde açar (izinsiz, tam yetkili).
+
+Bu modda ek olarak şunlar çalışır:
 
 - **Gerçek canlı kontrolü**: `@hesap`, `tiktok.com/@hesap/live`, `room_id` veya `snssdk1233://`
   linki → TikTok'un imzasız uçlarına sorulur (`/api/live/check`). Doğrulandı: canlı yayın için
@@ -151,5 +157,6 @@ asla var olmayan bir odaya gitmez.
 | DEMO rozeti gitmiyor | `EULER_API_KEY` secret'ı yok/geçersiz; Actions logunda `401` mesajına bak (Business plan gerekir) |
 | Panelde "veri eski" | İşçi son turda veri üretemedi; `data/meta.json` → `error` |
 | Yerel köprü 404 | `python local-server/bridge.py` çalışıyor mu, `http://127.0.0.1:8800/api/health` |
+| "Yerel köprüye ulaşılamadı" (Pages sayfası) | Chrome yerel ağ iznini reddetmiş olabilir — Ayarlar → Veri kaynağı → **Aç** ile `http://127.0.0.1:8800`'de aç |
 | Telegram testi ✗ | token/chat_id hatalı; grup için `-100…` biçimi; bot gruba ekli mi |
 | GitHub Pages 404 | Settings → Pages → Source = **GitHub Actions**, `deploy-pages` işi yeşil mi |
