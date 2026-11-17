@@ -204,6 +204,8 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
     raw_envelopes: list[dict] = []
     raw_gifts: list[dict] = []
     offline: dict[str, str] = {}
+    connected: dict[str, float] = {}
+    clients: list = []
     started = time.time()
 
     async def watch(meta: dict) -> None:
@@ -212,6 +214,17 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
             return
         room_key = f"@{handle}"
         client = TikTokLiveClient(unique_id=handle)
+        clients.append(client)
+
+        try:
+            from TikTokLive.events import ConnectEvent  # type: ignore
+        except Exception:
+            ConnectEvent = None  # type: ignore
+        if ConnectEvent is not None:
+            @client.on(ConnectEvent)  # type: ignore[misc]
+            async def _on_connect(_event):  # noqa: ANN001
+                connected[handle] = time.time()
+                log(f"@{handle}: baglandi")
 
         @client.on(GiftEvent)  # type: ignore[misc]
         async def _on_gift(event):  # noqa: ANN001
@@ -252,7 +265,11 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                     meta["viewers"] = count
 
         try:
-            await client.connect()
+            # connect() yerine start(): connect() iptal yolunda _clean_tasks() cagirip
+            # zaten calisan loop'ta run_until_complete deniyor ve
+            # "RuntimeError: This event loop is already running" atiyor.
+            task = await client.start()
+            await task
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -267,6 +284,15 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        # disconnect() coroutine'leri tek tek wait_for ile beklersek iptal
+        # aninda hiç await edilmeden çöp oluyor ("was never awaited" uyarısı).
+        # Hepsini tek gather'da bekle, iptal olursa açık kalanları kapat.
+        closing = [asyncio.ensure_future(client.disconnect(close_client=True)) for client in clients]
+        try:
+            await asyncio.wait_for(asyncio.gather(*closing, return_exceptions=True), timeout=10)
+        except BaseException:   # CancelledError BaseException'dir, Exception degil
+            for task_ in closing:
+                task_.cancel()
 
     window = max(1.0, time.time() - started)
     _append_jsonl("envelopes.jsonl", raw_envelopes)
@@ -288,10 +314,16 @@ async def _capture(api_key: str, regions: list[str], watchlist: list[str],
                   + (f" | feed: {feed_error}" if feed_error else ""))
     elif not rooms and feed_error:
         detail = feed_error
+    elif not rooms and connected:
+        detail = (f"dinlenen {len(picked)} odadan {len(connected)} tanesine baglanildi, "
+                  f"dinleme suresinde hediye/zarf gelmedi")
     elif not rooms:
         detail = f"dinlenen {len(picked)} odada hediye/zarf gelmedi"
     elif not chests:
         detail = "jeton akisi olculdu, dinleme suresinde sandik zarfi gelmedi"
+    if offline and rooms:
+        detail = (detail + " | " if detail else "") + \
+                 "baglanamayan: " + ", ".join(f"@{h} ({r})" for h, r in sorted(offline.items()))
     return rooms, detail
 
 

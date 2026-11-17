@@ -6,3 +6,10 @@
 #
 # Bu dosyada en az bir satır doluysa toplayıcı DEMO yerine GERÇEK TikTok verisine geçer:
 # hediyelerden jeton akışı, zarf düşerse sandık listelenir. Dosya boşken panel DEMO'da kalır.
+#
+# NOT: her hesap için bir websocket bağlantısı açılır; anonim imza kotası sınırlı
+# (~100 bağlantı/gün). Pompa 30 dakikada bir çalışır, 3 hesap ≈ 144 bağlantı/gün.
+# Kota dolunca toplayıcı önceki listeyi "stale" işaretiyle korur.
+@raganuburvis
+@creatinetwins666
+@beinsports
