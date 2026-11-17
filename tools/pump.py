@@ -36,8 +36,10 @@ def log(msg: str) -> None:
 
 
 def run(cmd: list[str], check: bool = False, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=str(ROOT), text=True, capture_output=True,
-                          check=check, env=env)
+    # encoding şart: Windows'ta varsayılan cp1254, collect çıktısındaki emoji/Arapça
+    # kullanıcı adlarında UnicodeDecodeError atıp çıktıyı yarıda kesiyordu.
+    return subprocess.run(cmd, cwd=str(ROOT), text=True, encoding="utf-8", errors="replace",
+                          capture_output=True, check=check, env=env)
 
 
 def token() -> str:
