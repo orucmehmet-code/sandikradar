@@ -1,21 +1,21 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794908942041,
+  "generated_at": 1794909542304,
   "provider": "sim",
   "demo": true,
   "refresh_seconds": 60,
-  "total": 220,
+  "total": 248,
   "tab_counts": {
-    "chest": 134,
-    "bag": 86,
-    "flow": 0,
-    "ratio2": 136,
-    "ratio4": 91,
-    "level01": 34,
-    "hanging": 27,
-    "kismet": 68,
-    "gold": 26
+    "chest": 133,
+    "bag": 87,
+    "flow": 28,
+    "ratio2": 150,
+    "ratio4": 105,
+    "level01": 35,
+    "hanging": 22,
+    "kismet": 64,
+    "gold": 27
   },
   "tabs": [
     {
@@ -137,7 +137,7 @@
       }
     }
   ],
-  "notice": "DEMO veri — gercek TikTok yayini degil. Gercek sandik icin EULER_API_KEY ekle.",
+  "notice": "DEMO veri — gercek TikTok yayini degil. Gercek sandik/jeton akisi icin EULER_API_KEY ekle.",
   "error": "",
-  "rooms": 220
+  "rooms": 248
 }
