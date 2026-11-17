@@ -1,0 +1,66 @@
+name: collect-data
+
+# Veriyi GitHub Actions işçisi üretir: docs/data/rooms.json dosyasını yazar ve
+# commit eder. Pages yayını bu commit ile otomatik yenilenir.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"         # her 5 dakika (GitHub cron minimumu)
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "sim | euler | auto"
+        required: false
+        default: "auto"
+      seconds:
+        description: "websocket dinleme süresi (saniye)"
+        required: false
+        default: "150"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EULER_API_KEY: ${{ secrets.EULER_API_KEY }}
+      EULER_REGIONS: ${{ vars.EULER_REGIONS }}
+      WATCHLIST: ${{ vars.WATCHLIST }}
+      MAX_ROOMS: ${{ vars.MAX_ROOMS }}
+      DATA_PROVIDER: ${{ inputs.provider || 'auto' }}
+      CAPTURE_SECONDS: ${{ inputs.seconds || '150' }}
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sandık yakalama kütüphanesi (yalnızca anahtar varsa)
+        if: env.EULER_API_KEY != ''
+        run: |
+          pip install --quiet --disable-pip-version-check TikTokLive \
+            || echo "TikTokLive kurulamadı — sadece feed denenecek"
+
+      - name: Veri topla
+        run: python collector/collect.py
+
+      - name: Sonucu commit et
+        run: |
+          git config user.name "sandikradar-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A docs/data
+          if git diff --cached --quiet; then
+            echo "değişiklik yok — commit atlandı"
+          else
+            git commit -m "data: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi

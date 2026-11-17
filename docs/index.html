@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0b0f14" />
+<title>SandıkRadar — TikTok LIVE sandık &amp; çanta takibi</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">🎁</div>
+    <div class="brand-text">
+      <strong>SandıkRadar</strong>
+      <span id="demoBadge" class="demo-badge hidden" title="Sahte (demo) veri — gerçek TikTok yayını değil">DEMO</span>
+      <span id="status" class="status"><i class="dot"></i> <span id="statusText">yükleniyor…</span></span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="refreshBtn" title="Yenile" aria-label="Yenile">⟳</button>
+    <button class="icon-btn" id="pipBtn" title="Mini pencere" aria-label="Mini pencere">⧉</button>
+    <button class="icon-btn" id="soundBtn" title="Ses" aria-label="Ses">🔔</button>
+    <button class="icon-btn" id="settingsBtn" title="Ayarlar" aria-label="Ayarlar">⚙</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs" aria-label="Sekmeler"></nav>
+
+<div class="toolbar">
+  <div class="count" id="countLabel">—</div>
+  <div class="toolbar-right">
+    <select id="sortSelect" class="mini-select" aria-label="Sıralama">
+      <option value="opens_at">Açılışa göre</option>
+      <option value="coins">Jeton</option>
+      <option value="ratio">Oran</option>
+      <option value="viewers">İzleyici</option>
+      <option value="left">Kalan süre</option>
+    </select>
+    <button class="chip-btn" id="filterBtn">Filtre <span id="filterCount" class="badge hidden">0</span></button>
+  </div>
+</div>
+
+<main id="list" class="list" aria-live="polite"></main>
+
+<div id="empty" class="empty hidden">
+  <div class="empty-emoji">🔍</div>
+  <p id="emptyText">Uygun LIVE aranıyor…</p>
+  <button class="chip-btn" id="emptyReset">Filtreleri sıfırla</button>
+</div>
+
+<div id="offline" class="offline hidden">Bağlantı kesildi, yeniden deneniyor…</div>
+
+<!-- ---------------------------------------------------------------- filtre -->
+<div class="sheet-wrap" id="filterSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-close="filterSheet"></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="filterTitle">
+    <div class="sheet-grip"></div>
+    <h2 id="filterTitle">Filtreler</h2>
+
+    <div class="field">
+      <label>Tür</label>
+      <div class="segmented" id="fKind">
+        <button data-value="all" class="seg active">Tümü</button>
+        <button data-value="chest" class="seg">Sandık</button>
+        <button data-value="bag" class="seg">Çanta</button>
+      </div>
+    </div>
+
+    <div class="field" id="variantField">
+      <label>Sandık / çanta türü</label>
+      <div class="chips" id="fVariants">
+        <button data-value="normal" class="chip">Normal sandık</button>
+        <button data-value="gold" class="chip">Altın sandık</button>
+        <button data-value="hanging" class="chip">Askıda sandık</button>
+        <button data-value="l0" class="chip">Çanta Lv 0</button>
+        <button data-value="l1" class="chip">Çanta Lv 1</button>
+        <button data-value="l2" class="chip">Çanta Lv 2</button>
+        <button data-value="l3" class="chip">Çanta Lv 3</button>
+        <button data-value="l4" class="chip">Çanta Lv 4</button>
+        <button data-value="l5" class="chip">Çanta Lv 5</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Jeton aralığı</label>
+      <div class="row">
+        <input id="fMinCoins" type="number" inputmode="numeric" placeholder="en az" min="0" />
+        <input id="fMaxCoins" type="number" inputmode="numeric" placeholder="en çok" min="0" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Oran — 1000 jeton başına kontenjan payı (jeton / kontenjan / 1000)</label>
+      <div class="row">
+        <input id="fMinRatio" type="number" inputmode="decimal" placeholder="en az" min="0" step="0.1" />
+        <input id="fMaxRatio" type="number" inputmode="decimal" placeholder="en çok" min="0" step="0.1" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Kalan süre (saniye) — erken görmek için üst sınırı artır</label>
+      <div class="row">
+        <input id="fMinTime" type="number" inputmode="numeric" placeholder="en az" min="0" />
+        <input id="fMaxTime" type="number" inputmode="numeric" placeholder="en çok" min="0" />
+      </div>
+      <div class="chips tight" id="quickTime">
+        <button data-min="0" data-max="120" class="chip">≤ 2 dk</button>
+        <button data-min="0" data-max="600" class="chip">≤ 10 dk</button>
+        <button data-min="0" data-max="1800" class="chip">≤ 30 dk</button>
+        <button data-min="600" data-max="" class="chip">≥ 10 dk</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Ek koşullar</label>
+      <label class="switch-row">
+        <input type="checkbox" id="fViewersLtSlots" />
+        <span>İzleyici sayısı kontenjandan az olsun</span>
+      </label>
+      <label class="switch-row">
+        <input type="checkbox" id="fHideLate" />
+        <span>Açılıştan 60 sn sonra gizle</span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label>Vurgu eşiği (jeton) — üstündeki kartlar parlar</label>
+      <input id="fHighlight" type="number" inputmode="numeric" min="0" placeholder="boş = kapalı" />
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn ghost" id="resetFilters">Sıfırla</button>
+      <button class="btn primary" id="applyFilters">Uygula</button>
+    </div>
+  </section>
+</div>
+
+<!-- -------------------------------------------------------------- ayarlar -->
+<div class="sheet-wrap" id="settingsSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-close="settingsSheet"></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="sheet-grip"></div>
+    <h2 id="settingsTitle">Ayarlar</h2>
+
+    <div class="field">
+      <label>Dil</label>
+      <div class="segmented" id="sLang">
+        <button data-value="tr" class="seg">Türkçe</button>
+        <button data-value="en" class="seg">English</button>
+        <button data-value="vi" class="seg">Tiếng Việt</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Tema</label>
+      <div class="segmented" id="sTheme">
+        <button data-value="dark" class="seg">Koyu</button>
+        <button data-value="light" class="seg">Açık</button>
+        <button data-value="system" class="seg">Sistem</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Yazı boyutu</label>
+      <input type="range" id="sFont" min="90" max="125" step="5" value="100" />
+    </div>
+
+    <div class="field">
+      <label>Geri sayım renkleri (saniye)</label>
+      <p class="hint">Kalan süre bu aralığa girdiğinde kartın rengi değişir.</p>
+      <div class="row three">
+        <input id="sRed" type="number" min="0" max="3600" value="30" title="kırmızı" />
+        <input id="sAmber" type="number" min="0" max="3600" value="120" title="turuncu" />
+        <input id="sGreen" type="number" min="0" max="3600" value="600" title="yeşil" />
+      </div>
+      <div class="row swatches">
+        <label class="swatch"><input type="color" id="cRed" value="#ff3b5c" /></label>
+        <label class="swatch"><input type="color" id="cAmber" value="#ffa62b" /></label>
+        <label class="swatch"><input type="color" id="cGreen" value="#2ee6a8" /></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="switch-row">
+        <input type="checkbox" id="sSound" checked />
+        <span>Yeni uygun sandıkta ses çal</span>
+      </label>
+      <label class="switch-row">
+        <input type="checkbox" id="sNotify" />
+        <span>Tarayıcı bildirimi gönder</span>
+      </label>
+      <label class="switch-row">
+        <input type="checkbox" id="sAutoPip" />
+        <span>Sayfadan çıkınca mini pencereyi aç</span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label>Veri kaynağı</label>
+      <p class="hint">GitHub: sitenin yanında duran <code>data/rooms.json</code> (Actions işçisi üretir).
+        Yerel köprü: bilgisayarında çalışan canlı sunucu — gerçek canlı kontrolü, Telegram testi ve
+        saniyede bir yenilenen veri orada çalışır.</p>
+      <div class="segmented" id="sSource">
+        <button data-value="static" class="seg">GitHub (statik)</button>
+        <button data-value="local" class="seg">Yerel köprü</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="sBridge" type="text" placeholder="http://127.0.0.1:8800" autocomplete="off" />
+        <button class="btn ghost small" id="sBridgeTest">Test</button>
+      </div>
+      <div id="sourceStatus" class="hint"></div>
+    </div>
+
+    <div class="field">
+      <label>Gerçek canlı bağlantı kontrolü</label>
+      <p class="hint">TikTok canlı linkini, @hesabı ya da room_id'yi yapıştır. Kontrol TikTok'un kendi
+        (imzasız) uçlarına sorulur: yayında mı, kaç izleyici var. Bu istek tarayıcıdan yapılamaz
+        (CORS) — yerel köprü gerekir.</p>
+      <input id="sLiveInput" type="text" placeholder="https://www.tiktok.com/@hesap/live  ·  @hesap  ·  7300000000000000000" autocomplete="off" />
+      <div class="row">
+        <button class="btn ghost small" id="sLiveCheck">Kontrol et</button>
+        <button class="btn primary small" id="sLiveOpen">Aç</button>
+      </div>
+      <div id="liveStatus" class="hint"></div>
+    </div>
+
+    <div class="field">
+      <label>Telegram uyarıları</label>
+      <p class="hint">Bot token + chat id gir. Yeni sandık eşiği geçince mesaj gider. Statik modda mesaj
+        doğrudan tarayıcıdan gönderilir (token yalnızca bu cihazın localStorage'ında durur); yerel köprü
+        modunda sunucudan gönderilir.</p>
+      <input id="sTgToken" type="password" placeholder="bot token (123456:ABC…)" autocomplete="off" />
+      <input id="sTgChat" type="text" placeholder="chat id (-1001234567890)" />
+      <div class="row three">
+        <input id="sTgRatio" type="number" step="0.5" min="0" placeholder="min oran" />
+        <input id="sTgCoins" type="number" min="0" placeholder="min jeton" />
+        <button class="btn ghost small" id="sTgTest">Test</button>
+      </div>
+      <label class="switch-row">
+        <input type="checkbox" id="sTgDisabled" />
+        <span>Telegram uyarıları kapalı</span>
+      </label>
+      <div id="tgStatus" class="hint"></div>
+    </div>
+
+    <div class="field">
+      <div class="plan-card">
+        <div>
+          <strong>Tüm özellikler açık</strong>
+          <p class="hint">Orijinal uygulamada Plus/Pro isteyen mini pencere, tüm sekmeler, süre filtresi,
+            renkli geri sayım ve reklamsız kullanım burada kilit yok.</p>
+        </div>
+        <span class="pill">∞</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="info-card">
+        <strong>Veri durumu</strong>
+        <div id="dataInfo" class="hint">—</div>
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn ghost" id="closeSettings">Kapat</button>
+      <button class="btn primary" id="saveSettings">Kaydet</button>
+    </div>
+  </section>
+</div>
+
+<!-- -------------------------------------------------------- mini pencere -->
+<div id="mini" class="mini hidden" role="dialog" aria-label="Mini pencere">
+  <header class="mini-head" id="miniHead">
+    <strong>SandıkRadar</strong>
+    <span id="miniCount" class="mini-count"></span>
+    <button class="icon-btn small" id="miniPip" title="Her zaman üstte">⧉</button>
+    <button class="icon-btn small" id="miniClose" title="Kapat">✕</button>
+  </header>
+  <div id="miniList" class="mini-list"></div>
+</div>
+
+<template id="roomTpl">
+  <article class="card">
+    <div class="card-top">
+      <img class="avatar" alt="" loading="lazy" />
+      <div class="who">
+        <div class="line1"><span class="nick"></span><span class="kind-badge"></span></div>
+        <div class="line2"><span class="handle"></span><span class="sep">·</span><span class="viewers"></span></div>
+      </div>
+      <div class="timer"><span class="timer-val"></span><span class="timer-lbl"></span></div>
+    </div>
+    <p class="title"></p>
+    <div class="metrics">
+      <div class="metric"><span class="m-val coins"></span><span class="m-lbl">jeton</span></div>
+      <div class="metric"><span class="m-val ratio"></span><span class="m-lbl">oran</span></div>
+      <div class="metric"><span class="m-val slots"></span><span class="m-lbl">kontenjan</span></div>
+      <div class="metric joined-metric"><span class="m-val joined"></span><span class="m-lbl">katılan</span></div>
+    </div>
+    <div class="card-actions">
+      <button class="btn primary open-btn">CANLI'yı Aç</button>
+      <button class="btn ghost copy-btn" title="Katılım yorumunu kopyala">Yorumu kopyala</button>
+      <button class="btn ghost share-btn" title="Paylaş">↗</button>
+    </div>
+  </article>
+</template>
+
+<script src="app.js" defer></script>
+</body>
+</html>

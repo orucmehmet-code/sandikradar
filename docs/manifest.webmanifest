@@ -1,0 +1,14 @@
+{
+  "name": "SandıkRadar — TikTok LIVE sandık & çanta",
+  "short_name": "SandıkRadar",
+  "description": "TikTok LIVE odalarındaki sandık ve çanta ödüllerini açılış saatine göre bul, filtrele, bildirim al.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
