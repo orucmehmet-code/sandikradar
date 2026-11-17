@@ -1,15 +1,15 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794935958770,
+  "generated_at": 1794936227595,
   "provider": "euler",
   "demo": false,
   "refresh_seconds": 60,
-  "total": 1,
+  "total": 2,
   "tab_counts": {
     "chest": 0,
     "bag": 0,
-    "flow": 1,
+    "flow": 2,
     "ratio2": 0,
     "ratio4": 0,
     "level01": 0,
@@ -139,5 +139,5 @@
   ],
   "notice": "EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama",
   "error": "",
-  "rooms": 1
+  "rooms": 2
 }
