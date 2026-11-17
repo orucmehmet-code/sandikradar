@@ -1,21 +1,21 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794933001683,
+  "generated_at": 1794934142870,
   "provider": "sim",
   "demo": true,
   "refresh_seconds": 60,
   "total": 248,
   "tab_counts": {
-    "chest": 132,
-    "bag": 88,
+    "chest": 140,
+    "bag": 80,
     "flow": 28,
-    "ratio2": 155,
-    "ratio4": 114,
-    "level01": 34,
-    "hanging": 18,
-    "kismet": 82,
-    "gold": 28
+    "ratio2": 150,
+    "ratio4": 104,
+    "level01": 35,
+    "hanging": 17,
+    "kismet": 71,
+    "gold": 37
   },
   "tabs": [
     {
