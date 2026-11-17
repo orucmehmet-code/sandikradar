@@ -19,6 +19,7 @@ Token: `gh auth token` (gh girişliyse) ya da GITHUB_TOKEN ortam değişkeni.
 from __future__ import annotations
 
 import argparse
+import atexit
 import datetime
 import os
 import shutil
@@ -55,6 +56,30 @@ def remote_url() -> str:
     return (out.stdout or "").strip()
 
 
+def lock() -> bool:
+    """Aynı anda iki pompa çalışmasın: elle çalıştırma + zamanlanmış görev
+    `docs/data`'yı rebase sırasında ezip çakışma üretiyordu."""
+    p = ROOT / ".git" / "pump.lock"
+    try:
+        fd = os.open(str(p), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        try:
+            eski = datetime.datetime.now().timestamp() - p.stat().st_mtime
+        except OSError:
+            eski = 0
+        if eski < 900:            # 15 dk'dan taze → gerçekten çalışıyor
+            return False
+        p.unlink(missing_ok=True)  # çökmüş kalmış kilit
+        try:
+            fd = os.open(str(p), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            return False
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    atexit.register(lambda: p.unlink(missing_ok=True))
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="SandikRadar veri pompası")
     ap.add_argument("--provider", default=os.environ.get("DATA_PROVIDER", "auto"),
@@ -68,6 +93,16 @@ def main() -> int:
     if not (ROOT / ".git").exists():
         log(f"HATA: {ROOT} bir git deposu değil")
         return 2
+
+    if not lock():
+        log("başka bir pompa çalışıyor — bu tur atlandı")
+        return 0
+
+    # yarım kalmış turdan artık dosya kalmasın (yeniden üretilecek)
+    dirty = run(["git", "status", "--porcelain", "--", "docs/data"])
+    if (dirty.stdout or "").strip():
+        log("önceki turdan kalan değişiklikler geri alınıyor")
+        run(["git", "checkout", "--", "docs/data"])
 
     # 1) veriyi topla
     collect = [sys.executable, str(ROOT / "collector" / "collect.py"),
@@ -116,6 +151,7 @@ def main() -> int:
         return out.returncode
 
     log("push tamam — Pages birkaç dakikada güncellenir")
+    run(["git", "fetch", "--quiet", "origin"])   # takip ref'i güncel kalsın
     return 0
 
 
