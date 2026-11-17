@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: collect-data
@@ -64,3 +65,9 @@ jobs:
             git commit -m "data: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             git push
           fi
+
+      # GITHUB_TOKEN ile yapılan push başka workflow'u tetiklemez; yayını elle tetikle.
+      - name: Pages yayınını tetikle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --repo "${{ github.repository }}" || echo "deploy tetiklenemedi"

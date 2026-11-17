@@ -787,7 +787,7 @@ function updateDataInfo() {
     `kaynak: ${state.prefs.source === "local" ? "yerel köprü" : "data/rooms.json"}`,
     `sağlayıcı: ${d.provider || "?"}`,
     `üretildi: ${when}`,
-    `oda: ${state.rooms.length}`,
+    `gösterilen: ${state.rooms.length} / toplam: ${d.total ?? state.all.length ?? "?"}`,
   ];
   if (d.demo) bits.push("DEMO");
   if (d.stale) bits.push("ESKİ VERİ");
