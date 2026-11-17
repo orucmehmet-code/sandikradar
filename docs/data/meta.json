@@ -138,6 +138,8 @@
     }
   ],
   "notice": "EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama",
-  "error": "",
+  "error": "dinlenen 3 odadan 1 tanesine baglanildi, dinleme suresinde hediye/zarf gelmedi",
+  "stale": true,
+  "last_attempt": 1794954542095,
   "rooms": 1
 }
