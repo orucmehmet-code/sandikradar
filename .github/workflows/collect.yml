@@ -5,7 +5,10 @@ name: collect-data
 
 on:
   schedule:
-    - cron: "*/5 * * * *"         # her 5 dakika (GitHub cron minimumu)
+    # 5 dakikada bir, saat başından kaçınarak (GitHub yoğunlukta tur atar).
+    # NOT: GitHub'ın zamanlayıcısı yeni depolarda hiç tetiklenmeyebiliyor; cron
+    # ifadesini değiştirip push etmek planı yeniden kaydeder (README → Sorun giderme).
+    - cron: "2-57/5 * * * *"
   workflow_dispatch:
     inputs:
       provider:

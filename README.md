@@ -65,6 +65,8 @@ anı, `skin_id` → sandık/çanta türü, `envelope_id` → kararlı kimlik.
 
 ## 3) Yerel çalıştırma (pip yok, FastAPI yok)
 
+En kısa yol: kök dizindeki **`BASLAT.bat`** (Windows) veya `./local-server/baslat.sh`.
+
 ```bash
 python local-server/bridge.py          # → http://127.0.0.1:8800
 ```
