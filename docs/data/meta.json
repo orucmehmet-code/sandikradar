@@ -1,7 +1,7 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794898706732,
+  "generated_at": 1794898731268,
   "provider": "sim",
   "demo": true,
   "refresh_seconds": 60,
