@@ -1,21 +1,21 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794934142870,
-  "provider": "sim",
-  "demo": true,
+  "generated_at": 1794934540131,
+  "provider": "euler",
+  "demo": false,
   "refresh_seconds": 60,
-  "total": 248,
+  "total": 1,
   "tab_counts": {
-    "chest": 140,
-    "bag": 80,
-    "flow": 28,
-    "ratio2": 150,
-    "ratio4": 104,
-    "level01": 35,
-    "hanging": 17,
-    "kismet": 71,
-    "gold": 37
+    "chest": 0,
+    "bag": 0,
+    "flow": 1,
+    "ratio2": 0,
+    "ratio4": 0,
+    "level01": 0,
+    "hanging": 0,
+    "kismet": 0,
+    "gold": 0
   },
   "tabs": [
     {
@@ -137,7 +137,7 @@
       }
     }
   ],
-  "notice": "DEMO veri — gercek TikTok yayini degil. Gercek sandik/jeton akisi icin EULER_API_KEY ekle.",
+  "notice": "EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama",
   "error": "",
-  "rooms": 248
+  "rooms": 1
 }
