@@ -1,7 +1,7 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794934540131,
+  "generated_at": 1794935574893,
   "provider": "euler",
   "demo": false,
   "refresh_seconds": 60,
