@@ -1,20 +1,21 @@
 {
   "app": "SandikRadar",
   "version": "1.0.0",
-  "generated_at": 1794904741937,
+  "generated_at": 1794905341948,
   "provider": "sim",
   "demo": true,
   "refresh_seconds": 60,
   "total": 220,
   "tab_counts": {
-    "chest": 127,
-    "bag": 93,
-    "ratio2": 126,
-    "ratio4": 90,
-    "level01": 42,
-    "hanging": 19,
-    "kismet": 53,
-    "gold": 35
+    "chest": 129,
+    "bag": 91,
+    "flow": 0,
+    "ratio2": 131,
+    "ratio4": 97,
+    "level01": 33,
+    "hanging": 21,
+    "kismet": 62,
+    "gold": 29
   },
   "tabs": [
     {
@@ -39,6 +40,18 @@
       "plan": "free",
       "filter": {
         "kind": "bag"
+      }
+    },
+    {
+      "id": "flow",
+      "label": {
+        "tr": "Jeton akışı",
+        "vi": "Dòng xu",
+        "en": "Coin flow"
+      },
+      "plan": "free",
+      "filter": {
+        "kind": "live"
       }
     },
     {
