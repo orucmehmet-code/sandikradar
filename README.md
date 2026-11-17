@@ -145,6 +145,9 @@ asla var olmayan bir odaya gitmez.
   yaşını üst çubukta gösterir, 30 dakikayı geçince "⚠ veri eski" yazar.
 - TikTok kullanım şartları üçüncü taraf kazımayı sınırlar; bu bir **keşif** aracıdır: odaya
   girmez, ödül toplamaz, otomatik katılmaz.
+- GitHub'ın zamanlayıcısı "en iyi çaba" ile çalışır: yeni bir depoda ilk `schedule` tetiklemesi 1 saate kadar
+  gecikebilir, yoğun saatlerde turlar seyrek atlanır. Veri beklemek istemiyorsan Actions →
+  `collect-data` → **Run workflow**.
 - Depoya 60 gün hiç push gelmezse GitHub zamanlanmış işleri duraklatır (Actions → `collect-data` → ⋯ → Enable).
 - Actions IP'leri TikTok tarafından sınırlandırılabilir; o durumda `collect.py` önceki listeyi
   korur ve `data/meta.json` içindeki `error` alanında nedeni yazar (iş kırmızı yanmaz).
