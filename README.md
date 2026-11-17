@@ -119,6 +119,16 @@ py -3.12 collector/collect.py --watch "@hesap1,@hesap2" --seconds 90 --out data/
 - Bu makinede `TikTokLive` **py -3.12**'de kurulu (pompa de aynı yorumlayıcıyı kullanır:
   `tools/pump.bat` → `py -3.12 tools\pump.py`). Bağlantı kurulamazsa `meta.json` içinde
   sebep yazılır: `UserOfflineError` (hesap yayında değil), imza/anahtar hataları vb.
+- **Bağlanma yolu:** `client.connect()` kullanılmaz; iptal anında `_clean_tasks()` zaten
+  çalışan loop'ta `run_until_complete` çağırıp `RuntimeError: This event loop is already
+  running` atıyor. Bunun yerine `task = await client.start(); await task` + toplu
+  `disconnect()` (gather + 10 sn timeout).
+- **Kota:** her hesap bir websocket bağlantısı açar (anonim imza, ~100 bağlantı/gün).
+  Pompa 30 dakikada bir koşar; 3 hesap ≈ 144/gün. Kota dolarsa toplayıcı önceki listeyi
+  `stale: true` ile korur, panel boşalmaz.
+- **Durum (17 Kas 2026, canlı):** `data/watchlist.txt` = @raganuburvis, @creatinetwins666,
+  @beinsports. İlk gerçek turda `beinsports` odasında hediye akışı yakalandı (Rose ×2) ve
+  panel `demo:false` ile yayınlandı.
 
 
 
@@ -220,7 +230,7 @@ Her satır bu depoda **gerçekten koşularak** doğrulandı (2026-11-17). "Doğr
 | Ses uyarısı | ✅ (ilk dokunuştan sonra) | ✅ | `AudioContext` ilk tıklamada açılıyor; tarayıcı otomatik oynatmayı engellediği için ilk kullanıcı hareketi şart |
 | Tarayıcı bildirimi | ✅ (izin verilirse) | ✅ | İzin verilmemişken sessizce atlıyor, hata fırlatmıyor |
 | PWA / çevrimdışı | ✅ (son liste, "⚠ veri eski") | ✅ | Ağ kapatıldı: kabuk + 125 kart önbellekten geldi, yaş etiketi "veri eski" |
-| Veri tazeliği | pompa turu (10 dk) ya da **Run workflow** | 20 sn (canlı) | Görev 10:00 ve 10:09'da koştu, `Last Result: 0`, her tur commit + deploy |
+| Veri tazeliği | pompa turu (30 dk) ya da **Run workflow** | 20 sn (canlı) | Görev 10:00 ve 10:09'da koştu, `Last Result: 0`, her tur commit + deploy |
 | Gerçek canlı link kontrolü | ❌ | ✅ | Statik sayfadan TikTok uçları **CORS başlığı dönmediği için** "Failed to fetch"; köprüde `@beinsports → YAYINDA, 5.8K izleyici, id 7706853078218984210` |
 | Telegram uyarısı | ✅ (token cihazda saklanır) | ✅ (sunucu tarafı) | Tarayıcıdan `sendMessage` yalnızca **form-urlencoded** gövdeyle geçiyor (JSON gövde preflight'a takılıyor, "Failed to fetch"); sahte token → `✗ Unauthorized` yanıtı okundu, yani taşıma çalışıyor. Gerçek gönderim geçerli token ister |
 | Gerçek sandık verisi | `EULER_API_KEY` secret varsa ✅ | `collect.py --provider euler` | Yol doğrulandı: feed çağrısı gerçek `401 {"message":"The provided API Key is invalid."}` döndürüyor ve işçi önceki listeyi `stale: true` ile koruyor. **Business planlı anahtarla uçtan uca denenmedi** (elimde anahtar yok) |
