@@ -140,6 +140,6 @@
   "notice": "EulerStream feed + hediye jeton akisi + zarf (sandik) yakalama",
   "error": "TikTokLive yok (ModuleNotFoundError); feed 3 oda dondurdu ama canli yakalama yapilamadi",
   "stale": true,
-  "last_attempt": 1795264361362,
+  "last_attempt": 1795290340119,
   "rooms": 1
 }
